@@ -1,6 +1,8 @@
 
 ---------------------------------------- CERINTA 4 - CREARE TABELE ----------------------------------------
 
+SET SERVEROUTPUT ON;
+
 DROP SEQUENCE SECVENTA_CLIENTI;
 DROP SEQUENCE SECVENTA_ADRESE_SHOWROOM;
 DROP SEQUENCE SECVENTA_MOTOARE;
@@ -428,3 +430,110 @@ INSERT INTO VEHICULE_OPTIUNI (ID_VEHICUL, ID_OPTIUNE) VALUES (19, 7);
 INSERT INTO VEHICULE_OPTIUNI (ID_VEHICUL, ID_OPTIUNE) VALUES (19, 8);
 INSERT INTO VEHICULE_OPTIUNI (ID_VEHICUL, ID_OPTIUNE) VALUES (20, 9);
 INSERT INTO VEHICULE_OPTIUNI (ID_VEHICUL, ID_OPTIUNE) VALUES (20, 10);
+
+
+---------------------------------------- CERINTA 6 ----------------------------------------
+
+-- Formulați în limbaj natural o problemă pe care să o rezolvați folosind un subprogram stocat
+-- independent care să utilizeze toate cele 3 tipuri de colecții studiate. Apelați subprogramul.
+
+-- MEMORATI TOATE VEHICULELE CARE SUNT DETINUTE IN PREZENT DE CLIENTI, ADICA 
+-- VEHICULE.ID_SHOWROOM == NULL AND VEHICULE.ID_CLIENT != NULL; 
+-- AFISATI ACESTE VEHICULE IMPREUNA CU CLIENTUL SI FACTURA AFERENTA VANZARII
+
+-- AFISATI PENTRU FIECARE ANGAJAT IN ORDINE DESCRESCATOARE DUPA TOTALUL SUMELOR FACTURILOR EMISE DE ACESTA:
+-- - ID_ANGAJAT 
+-- - TOTALUL SUMELOR FACTURILOR EMISE DE ACESTA
+-- - NUMARUL DE FACTURI EMISE DE ACESTA
+
+CREATE OR REPLACE PROCEDURE cerinta_6 IS
+
+	TYPE tip_tablou_indexat IS TABLE OF ANGAJATI.ID_ANGAJAT%TYPE INDEX BY PLS_INTEGER;
+	TYPE tip_tablou_imbricat IS TABLE OF FACTURI.SUMA%TYPE INDEX BY PLS_INTEGER;
+	TYPE tip_vector is VARRAY(100) OF NUMBER(6);
+
+	t_id_angajati tip_tablou_indexat;
+	t_suma_facturi tip_tablou_imbricat;
+	t_numar_facturi tip_vector := tip_vector();
+
+	v_suma NUMBER(6) := 0;
+	v_contor NUMBER(6) := 0;
+
+	aux_id_angajat ANGAJATI.ID_ANGAJAT%TYPE;
+	aux_suma_factura FACTURI.SUMA%TYPE;
+	aux_numar_facturi NUMBER(6);
+
+
+BEGIN
+
+	-- ID_ANGAJATI
+	SELECT
+		ID_ANGAJAT
+	BULK COLLECT INTO t_id_angajati
+	FROM ANGAJATI;
+
+	-- SUME FACTURI
+	FOR i IN 1..t_id_angajati.COUNT LOOP
+
+		SELECT
+			NVL(SUM(SUMA), 0)
+		INTO v_suma
+		FROM FACTURI
+		WHERE ID_ANGAJAT = t_id_angajati(i);
+
+		t_suma_facturi(i) := v_suma;
+
+	END LOOP;
+
+	-- NUMAR FACTURI
+	FOR i IN 1..t_id_angajati.COUNT LOOP
+
+		SELECT
+			COUNT(*)
+		INTO v_contor
+		FROM FACTURI
+		WHERE ID_ANGAJAT = t_id_angajati(i);
+
+		t_numar_facturi.EXTEND;
+		t_numar_facturi(i) := v_contor;
+
+	END LOOP;
+
+	-- SORTARE DESCRESCATOR
+	FOR i IN 1..t_id_angajati.COUNT LOOP
+		FOR j IN i+1..t_id_angajati.COUNT LOOP
+			IF t_suma_facturi(i) < t_suma_facturi(j) THEN
+				
+				aux_id_angajat := t_id_angajati(i);
+				t_id_angajati(i) := t_id_angajati(j);
+				t_id_angajati(j) := aux_id_angajat;
+
+				aux_suma_factura := t_suma_facturi(i);
+				t_suma_facturi(i) := t_suma_facturi(j);
+				t_suma_facturi(j) := aux_suma_factura;
+
+				aux_numar_facturi := t_numar_facturi(i);
+				t_numar_facturi(i) := t_numar_facturi(j);
+				t_numar_facturi(j) := aux_numar_facturi;
+
+			END IF;
+		END LOOP;
+	END LOOP;
+
+	-- AFISARE
+	FOR i IN 1..t_id_angajati.COUNT LOOP
+
+		DBMS_OUTPUT.PUT_LINE('--------------------------------------------------------------------');
+		DBMS_OUTPUT.PUT_LINE('ID_ANGAJAT: ' || t_id_angajati(i));
+		DBMS_OUTPUT.PUT_LINE('TOTALUL SUMELOR FACTURILOR EMISE DE ACESTA: ' || t_suma_facturi(i));
+		DBMS_OUTPUT.PUT_LINE('NUMARUL DE FACTURI EMISE DE ACESTA: ' || t_numar_facturi(i));
+
+	END LOOP;
+
+END;
+/
+
+BEGIN
+	cerinta_6;
+END;
+/
