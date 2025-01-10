@@ -452,11 +452,11 @@ INSERT INTO VEHICULE_OPTIUNI (ID_VEHICUL, ID_OPTIUNE) VALUES (20, 10);
 CREATE OR REPLACE PROCEDURE cerinta_6 IS
 
 	TYPE tip_tablou_indexat IS TABLE OF ANGAJATI.ID_ANGAJAT%TYPE INDEX BY PLS_INTEGER;
-	TYPE tip_tablou_imbricat IS TABLE OF FACTURI.SUMA%TYPE INDEX BY PLS_INTEGER;
+	TYPE tip_tablou_imbricat IS TABLE OF FACTURI.SUMA%TYPE;
 	TYPE tip_vector is VARRAY(100) OF NUMBER(6);
 
 	t_id_angajati tip_tablou_indexat;
-	t_suma_facturi tip_tablou_imbricat;
+	t_suma_facturi tip_tablou_imbricat := tip_tablou_imbricat();
 	t_numar_facturi tip_vector := tip_vector();
 
 	v_suma NUMBER(6) := 0;
@@ -489,6 +489,7 @@ BEGIN
 		FROM FACTURI
 		WHERE ID_ANGAJAT = t_id_angajati(i);
 
+		t_suma_facturi.EXTEND;
 		t_suma_facturi(i) := v_suma;
 
 	END LOOP;
