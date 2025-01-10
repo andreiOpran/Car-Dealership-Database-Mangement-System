@@ -62,7 +62,7 @@ CREATE TABLE CLIENTI (
 );
 
 CREATE TABLE ADRESE_SHOWROOMURI (
-    ID_ADRESA_SHOWROOM NUMBER(6) PRIMARY KEY,    
+    ID_ADRESA_SHOWROOM NUMBER(6) PRIMARY KEY,
     STRADA VARCHAR2(256),
     NUMAR NUMBER(6),
     ORAS VARCHAR2(256)
@@ -176,6 +176,8 @@ INSERT INTO CLIENTI (ID_CLIENT, NUME) VALUES (SECVENTA_CLIENTI.NEXTVAL, 'Maria I
 INSERT INTO CLIENTI (ID_CLIENT, NUME) VALUES (SECVENTA_CLIENTI.NEXTVAL, 'Vasile Georgescu');
 INSERT INTO CLIENTI (ID_CLIENT, NUME) VALUES (SECVENTA_CLIENTI.NEXTVAL, 'Elena Mihai');
 INSERT INTO CLIENTI (ID_CLIENT, NUME) VALUES (SECVENTA_CLIENTI.NEXTVAL, 'Cristina Stoica');
+INSERT INTO CLIENTI (ID_CLIENT, NUME) VALUES (SECVENTA_CLIENTI.NEXTVAL, 'CLIENT DUPLICAT'); -- PENTRU EXCEPTII
+INSERT INTO CLIENTI (ID_CLIENT, NUME) VALUES (SECVENTA_CLIENTI.NEXTVAL, 'CLIENT DUPLICAT'); -- PENTRU EXCEPTII
 -- INSERT INTO CLIENTI (ID_CLIENT, NUME) VALUES (SECVENTA_CLIENTI.NEXTVAL, 'Andrei Dumitru');
 -- INSERT INTO CLIENTI (ID_CLIENT, NUME) VALUES (SECVENTA_CLIENTI.NEXTVAL, 'Daniela Marin');
 -- INSERT INTO CLIENTI (ID_CLIENT, NUME) VALUES (SECVENTA_CLIENTI.NEXTVAL, 'Mihai Petrescu');
@@ -393,6 +395,10 @@ INSERT INTO NUMERE_TELEFON_CLIENTI (ID_NUMAR_TELEFON_CLIENT, ID_CLIENT, NUMAR_TE
 VALUES (SECVENTA_NUMERE_TELEFON_CLIENT.NEXTVAL, 5, '0749 584 431');
 INSERT INTO NUMERE_TELEFON_CLIENTI (ID_NUMAR_TELEFON_CLIENT, ID_CLIENT, NUMAR_TELEFON)
 VALUES (SECVENTA_NUMERE_TELEFON_CLIENT.NEXTVAL, 5, '0755 492 120');
+INSERT INTO NUMERE_TELEFON_CLIENTI (ID_NUMAR_TELEFON_CLIENT, ID_CLIENT, NUMAR_TELEFON)
+VALUES (SECVENTA_NUMERE_TELEFON_CLIENT.NEXTVAL, 6, '0700 000 006'); -- PENTRU CLIENT DUPLICAT
+INSERT INTO NUMERE_TELEFON_CLIENTI (ID_NUMAR_TELEFON_CLIENT, ID_CLIENT, NUMAR_TELEFON)
+VALUES (SECVENTA_NUMERE_TELEFON_CLIENT.NEXTVAL, 7, '0700 000 007'); -- PENTRU CLIENT DUPLICAT
 
 INSERT INTO SHOWROOMURI_ANGAJATI (ID_SHOWROOM, ID_ANGAJAT, PROGRAM) VALUES (1, 1, 'Luni-Miercuri 9-17');
 INSERT INTO SHOWROOMURI_ANGAJATI (ID_SHOWROOM, ID_ANGAJAT, PROGRAM) VALUES (1, 2, 'Luni-Vineri 9-17');
@@ -442,6 +448,7 @@ INSERT INTO VEHICULE_OPTIUNI (ID_VEHICUL, ID_OPTIUNE) VALUES (20, 10);
 -- - TOTALUL SUMELOR FACTURILOR EMISE DE ACESTA
 -- - NUMARUL DE FACTURI EMISE DE ACESTA
 
+
 CREATE OR REPLACE PROCEDURE cerinta_6 IS
 
 	TYPE tip_tablou_indexat IS TABLE OF ANGAJATI.ID_ANGAJAT%TYPE INDEX BY PLS_INTEGER;
@@ -459,6 +466,7 @@ CREATE OR REPLACE PROCEDURE cerinta_6 IS
 	aux_suma_factura FACTURI.SUMA%TYPE;
 	aux_numar_facturi NUMBER(6);
 
+	e_zero_angajati EXCEPTION;
 
 BEGIN
 
@@ -467,6 +475,10 @@ BEGIN
 		ID_ANGAJAT
 	BULK COLLECT INTO t_id_angajati
 	FROM ANGAJATI;
+
+	IF t_id_angajati.COUNT = 0 THEN
+		RAISE e_zero_angajati;
+	END IF;
 
 	-- SUME FACTURI
 	FOR i IN 1..t_id_angajati.COUNT LOOP
@@ -525,11 +537,361 @@ BEGIN
 		DBMS_OUTPUT.PUT_LINE('NUMARUL DE FACTURI EMISE DE ACESTA: ' || t_numar_facturi(i));
 
 	END LOOP;
+	DBMS_OUTPUT.PUT_LINE('--------------------------------------------------------------------');
 
-END;
+EXCEPTION
+	WHEN e_zero_angajati THEN
+		RAISE_APPLICATION_ERROR(-20001, 'NU EXISTA ANGAJATI IN BAZA DE DATE');
+	WHEN OTHERS THEN
+		RAISE_APPLICATION_ERROR(-20000, 'EROARE: ' || SQLERRM);
+END cerinta_6;
 /
 
 BEGIN
 	cerinta_6;
+END;
+/
+
+
+---------------------------------------- CERINTA 7 ----------------------------------------
+
+-- Formulați în limbaj natural o problemă pe care să o rezolvați folosind un subprogram stocat
+-- independent care să utilizeze 2 tipuri diferite de cursoare studiate, unul dintre acestea fiind cursor
+-- parametrizat, dependent de celălalt cursor. Apelați subprogramul.
+
+-- SA SE AFISEZE VEHICULELE DETINUTE DE CATRE CLIENTI CARE AU FOST VANDUTE IN ANUL 2024 
+-- (ANUL VANZARII SE REGASESTE IN FACTURA)
+-- LA FIECARE VEHICUL SA SE AFISEZE SI ANGAJATUL CARE A EFECTUAT VANZAREA
+-- LA FINAL SA SE AFISEZE SUMA TOTALA A VEHICULELOR VANDUTE IN 2024
+
+
+CREATE OR REPLACE PROCEDURE cerinta_7 IS
+
+	CURSOR c_vehicule_clienti (p_id_vehicul_factura FACTURI.ID_VEHICUL%TYPE) IS
+		SELECT
+			ID_VEHICUL,
+			MARCA,
+			MODEL,
+			PRET
+		FROM VEHICULE
+		WHERE ID_VEHICUL = p_id_vehicul_factura;
+
+	v_cont NUMBER(6) := 0;
+	v_suma NUMBER(6) := 0;
+
+	v_nr_vehicule_clienti NUMBER(6) := 0;
+	e_nu_exista_vehicule EXCEPTION;
+
+BEGIN
+
+	-- verificare existenta vechiule vandute in 2024
+	SELECT
+		COUNT(*)
+	INTO v_nr_vehicule_clienti
+	FROM FACTURI
+	WHERE EXTRACT(YEAR FROM DATA_FACTURA) = 2024;
+
+	IF v_nr_vehicule_clienti = 0 THEN
+		RAISE e_nu_exista_vehicule;
+	END IF;
+
+	DBMS_OUTPUT.PUT_LINE('---------------------------------------------');
+	DBMS_OUTPUT.PUT_LINE('VEHICULE VANDUTE IN ANUL 2024:');
+	FOR angajat_factura_2024 in (SELECT 
+									F.ID_VEHICUL,
+									A.ID_ANGAJAT,
+									A.NUME 
+								FROM FACTURI F
+								JOIN ANGAJATI A ON F.ID_ANGAJAT = A.ID_ANGAJAT
+								WHERE EXTRACT(YEAR FROM DATA_FACTURA) = 2024) LOOP
+
+		FOR vehicul_client in c_vehicule_clienti(angajat_factura_2024.ID_VEHICUL) LOOP
+
+			v_cont := v_cont + 1;
+			v_suma := v_suma + vehicul_client.PRET;
+			DBMS_OUTPUT.PUT_LINE('----------------------' || v_cont || '----------------------');
+			DBMS_OUTPUT.PUT_LINE('ID_VEHICUL: ' || vehicul_client.ID_VEHICUL);
+			DBMS_OUTPUT.PUT_LINE('MARCA: ' || vehicul_client.MARCA);
+			DBMS_OUTPUT.PUT_LINE('MODEL: ' || vehicul_client.MODEL);
+			DBMS_OUTPUT.PUT_LINE('PRET: ' || vehicul_client.PRET);
+			DBMS_OUTPUT.PUT_LINE(' ');
+			DBMS_OUTPUT.PUT_LINE('DATE ANGAJAT:');
+			DBMS_OUTPUT.PUT_LINE('ID_ANGAJAT: ' || angajat_factura_2024.ID_ANGAJAT);
+			DBMS_OUTPUT.PUT_LINE('NUME ANGAJAT: ' || angajat_factura_2024.NUME);
+
+		END LOOP;
+
+	END LOOP;
+	DBMS_OUTPUT.PUT_LINE('---------------------------------------------------');
+	DBMS_OUTPUT.PUT_LINE('SUMA TOTALA A VEHICULELOR VANDUTE IN 2024: ' || v_suma);
+
+EXCEPTION
+	WHEN e_nu_exista_vehicule THEN
+		RAISE_APPLICATION_ERROR(-20001, 'NU EXISTA VEHICULE VANDUTE IN ANUL 2024');
+	WHEN OTHERS THEN
+		RAISE_APPLICATION_ERROR(-20000, 'EROARE: ' || SQLERRM);
+END cerinta_7;
+/
+
+BEGIN
+	cerinta_7;
+END;
+/
+
+
+---------------------------------------- CERINTA 8 ----------------------------------------
+
+-- Formulați în limbaj natural o problemă pe care să o rezolvați folosind un subprogram stocat
+-- independent de tip funcție care să utilizeze într-o singură comandă SQL 3 dintre tabelele create.
+-- Tratați toate excepțiile care pot apărea, incluzând excepțiile predefinite NO_DATA_FOUND și
+-- TOO_MANY_ROWS. Apelați subprogramul astfel încât să evidențiați toate cazurile tratate.
+
+-- SCRIETI O FUNCITE CARE PRIMESTE CA PARAMETRU NUMELE UNUI CLIENT SI RETURNEAZA UN NUMAR
+-- DE TELEFON AL ACESTUIA SI NUMARUL DE VEHICULE PE CARE LE-A CUMPARAT
+-- DACA NU EXISTA CLIENTI CU ACEL NUME, SE VA AFISA UN MESAJ
+-- DACA SUNT 2 CLIENTI CU ACELASI NUME, SE VA AFISA UN MESAJ
+
+
+CREATE OR REPLACE FUNCTION cerinta_8(p_nume_client IN CLIENTI.NUME%TYPE) RETURN VARCHAR2 IS
+
+	v_nr_clienti NUMBER(6) := 0;
+	v_numar_telefon NUMERE_TELEFON_CLIENTI.NUMAR_TELEFON%TYPE;
+	v_nr_vehicule NUMBER(6) := 0;
+	v_rezultat VARCHAR2(256);
+
+	-- EXCEPTII PROPRII 
+	e_nu_exista_clienti EXCEPTION;
+	e_prea_multi_clienti EXCEPTION;
+
+BEGIN
+
+	SELECT
+		COUNT(*)
+	INTO v_nr_clienti
+	FROM CLIENTI
+	WHERE UPPER(NUME) = UPPER('p_nume_client');
+
+	-- EXCEPTII PROPRII 
+	-- IF v_nr_clienti = 0 THEN
+	-- 	RAISE e_nu_exista_clienti;
+	-- ELSIF v_nr_clienti > 1 THEN
+	-- 	RAISE e_prea_multi_clienti;
+	-- END IF;
+
+	SELECT
+		(SELECT 
+			NTC.NUMAR_TELEFON 
+		FROM NUMERE_TELEFON_CLIENTI NTC
+		WHERE C.ID_CLIENT = NTC.ID_CLIENT AND ROWNUM = 1
+		) AS NUMAR_TELEFON,
+		COUNT(V.ID_VEHICUL) AS NUMAR_VEHICULE
+	INTO v_numar_telefon, v_nr_vehicule
+	FROM CLIENTI C
+	LEFT JOIN VEHICULE V ON C.ID_CLIENT = V.ID_CLIENT
+	WHERE UPPER(C.NUME) = UPPER(p_nume_client)
+	GROUP BY C.ID_CLIENT;
+
+	v_rezultat := 'Clientul cu numele ' || p_nume_client || ' are numarul de telefon ' || v_numar_telefon || ' si detine ' || v_nr_vehicule || ' vehicule.';
+	RETURN v_rezultat;
+
+EXCEPTION
+	-- EXCEPTII PROPRII 
+	-- WHEN e_nu_exista_clienti THEN
+	-- 	RAISE_APPLICATION_ERROR(-20001, 'NU EXISTA CLIENTI CU ACEST NUME');
+	-- WHEN e_prea_multi_clienti THEN
+	-- 	RAISE_APPLICATION_ERROR(-20002, 'EXISTA MAI MULTI CLIENTI CU ACEST NUME');
+	WHEN TOO_MANY_ROWS THEN
+		RAISE_APPLICATION_ERROR(-20004, 'TOO_MANY_ROWS ' || SQLERRM);
+	WHEN NO_DATA_FOUND THEN
+		RAISE_APPLICATION_ERROR(-20003, 'NO_DATA_FOUND ' || SQLERRM);
+	WHEN OTHERS THEN
+		RAISE_APPLICATION_ERROR(-20000, 'EROARE: ' || SQLERRM);
+END cerinta_8;
+/
+
+DECLARE
+
+	v_rezultat VARCHAR2(256);
+
+BEGIN
+
+	v_rezultat := cerinta_8('ION POPESCU');
+	DBMS_OUTPUT.PUT_LINE(v_rezultat);
+
+	v_rezultat := cerinta_8('CLIENT DUPLICAT');
+	DBMS_OUTPUT.PUT_LINE(v_rezultat);
+
+	v_rezultat := cerinta_8('CLIENT INEXISTENT');
+	DBMS_OUTPUT.PUT_LINE(v_rezultat);
+
+END;
+/
+
+
+---------------------------------------- CERINTA 9 ----------------------------------------
+
+-- Formulați în limbaj natural o problemă pe care să o rezolvați folosind un subprogram stocat
+-- independent de tip procedură care să aibă minim 2 parametri și să utilizeze într-o singură
+-- comandă SQL 5 dintre tabelele create. Definiți minim 2 excepții proprii, altele decât cele
+-- predefinite la nivel de sistem. Apelați subprogramul astfel încât să evidențiați toate 
+-- cazurile definite și tratate.
+
+-- DEFINITI O PROCEDURA CARE PRIMESTE CA PARAMETRI ID_VEHICUL, MARCA SI MODELUL UNUI VEHICUL
+-- PROCEDURA AFISEAZA
+-- - ANUL FABRICATIEI SI PRETUL VEHICULULUI
+-- - INFORMATII DESPRE MOTORUL VEHICULULUI
+-- - O LISTA CU OPTIUNILE EXTRA ALE VEHICULULUI
+-- - DATE DESPRE CLIENT DACA VEHICULUL ESTE DETINUT DE CATRE UN CLIENT, ALTFEL SE AFISEAZA DATE DESPRE SHOWROOM
+-- DACA NU EXISTA VEHICULE CU ACEASTA MARCA SI MODEL, SE VA AFISA UN MESAJ CORESPUNZATOR
+-- DACA NU ARE OPTIUNI EXTRA ATUNCI SE VA AFISA UN MESAJ CORESPUNZATOR
+
+
+CREATE OR REPLACE PROCEDURE cerinta_9(p_id_vehicul IN VEHICULE.ID_VEHICUL%TYPE, p_marca IN VEHICULE.MARCA%TYPE, p_model IN VEHICULE.MARCA%TYPE) IS
+
+	TYPE r_cerinta_9 IS RECORD (
+		
+		id_vehicul VEHICULE.ID_VEHICUL%TYPE,
+		marca VEHICULE.MARCA%TYPE,
+		model VEHICULE.MODEL%TYPE,
+		an_fabricatie VEHICULE.AN_FABRICATIE%TYPE,
+		pret VEHICULE.PRET%TYPE,
+
+		id_motor MOTOARE.ID_MOTOR%TYPE,
+		cai_putere MOTOARE.CAI_PUTERE%TYPE,
+		capacitate_cilindrica MOTOARE.CAPACITATE_CILINDRICA%TYPE,
+
+		nume_client CLIENTI.NUME%TYPE,
+		-- SAU
+		nume_showroom SHOWROOMURI.NUME%TYPE,
+
+		optiuni VARCHAR2(2048)
+	);
+
+	v_r_cerinta_9 r_cerinta_9;
+
+	v_nr_vehicule NUMBER(6) := 0;
+	v_nr_optiuni NUMBER(6) := 0;
+
+	e_nu_exista_vehicule EXCEPTION;
+	e_nu_are_optiuni EXCEPTION;
+
+BEGIN
+
+	-- EXTRAGERE NUMARUL DE VEHICULE CU COMBINATIA p_id_vehicul, p_marca, p_model
+	SELECT
+		COUNT(*)
+	INTO v_nr_vehicule
+	FROM VEHICULE
+	WHERE ID_VEHICUL = p_id_vehicul AND UPPER(MARCA) = UPPER(p_marca) 
+		AND UPPER(MODEL) = UPPER(p_model);
+
+	IF v_nr_vehicule = 0 THEN
+		RAISE e_nu_exista_vehicule;
+	END IF;
+
+	-- EXTRAGERE NUMAR OPTIUNI
+	SELECT
+		COUNT(*)
+	INTO v_nr_optiuni
+	FROM VEHICULE_OPTIUNI
+	WHERE ID_VEHICUL = p_id_vehicul;
+
+	SELECT
+		V.ID_VEHICUL,
+		V.MARCA,
+		V.MODEL,
+		V.AN_FABRICATIE,
+		V.PRET,
+		M.ID_MOTOR,
+		M.CAI_PUTERE,
+		M.CAPACITATE_CILINDRICA,
+		C.NUME,
+		S.NUME,
+		LISTAGG(O.NUME, ', ') WITHIN GROUP (ORDER BY O.ID_OPTIUNE)
+	INTO v_r_cerinta_9.id_vehicul, v_r_cerinta_9.marca, v_r_cerinta_9.model, 
+			v_r_cerinta_9.an_fabricatie, v_r_cerinta_9.pret, v_r_cerinta_9.id_motor, 
+			v_r_cerinta_9.cai_putere, v_r_cerinta_9.capacitate_cilindrica, 
+			v_r_cerinta_9.nume_client, v_r_cerinta_9.nume_showroom, v_r_cerinta_9.optiuni
+	FROM VEHICULE V
+	JOIN MOTOARE M ON V.ID_MOTOR = M.ID_MOTOR
+	LEFT JOIN CLIENTI C ON V.ID_CLIENT = C.ID_CLIENT
+	LEFT JOIN SHOWROOMURI S ON V.ID_SHOWROOM = S.ID_SHOWROOM
+	LEFT JOIN VEHICULE_OPTIUNI VO ON V.ID_VEHICUL = VO.ID_VEHICUL
+	LEFT JOIN OPTIUNI O ON VO.ID_OPTIUNE = O.ID_OPTIUNE
+	WHERE V.ID_VEHICUL = p_id_vehicul AND UPPER(V.MARCA) = UPPER(p_marca) 
+			AND UPPER(V.MODEL) = UPPER(p_model)
+	GROUP BY V.ID_VEHICUL, V.MARCA, V.MODEL, V.AN_FABRICATIE, V.PRET, M.ID_MOTOR, 
+				M.CAI_PUTERE, M.CAPACITATE_CILINDRICA, C.NUME, S.NUME;
+
+	-- AFISARE VEHICUL
+	DBMS_OUTPUT.PUT_LINE('------------------ DATE VEHICUL ------------------');
+	DBMS_OUTPUT.PUT_LINE('ID_VEHICUL: ' || v_r_cerinta_9.id_vehicul);
+	DBMS_OUTPUT.PUT_LINE('MARCA: ' || v_r_cerinta_9.marca);
+	DBMS_OUTPUT.PUT_LINE('MODEL: ' || v_r_cerinta_9.model);
+	DBMS_OUTPUT.PUT_LINE('AN FABRICATIE: ' || v_r_cerinta_9.an_fabricatie);
+	DBMS_OUTPUT.PUT_LINE('PRET: ' || v_r_cerinta_9.pret);
+	
+	-- AFISARE MOTOR
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE('------------------ DATE MOTOR --------------------');
+	DBMS_OUTPUT.PUT_LINE('ID_MOTOR: ' || v_r_cerinta_9.id_motor);
+	DBMS_OUTPUT.PUT_LINE('CAI PUTERE: ' || v_r_cerinta_9.cai_putere);
+	DBMS_OUTPUT.PUT_LINE('CAPACITATE CILINDRICA: ' || v_r_cerinta_9.capacitate_cilindrica);
+	
+	-- AFISARE OPTIUNI
+	BEGIN
+	DBMS_OUTPUT.PUT_LINE(' ');
+		DBMS_OUTPUT.PUT_LINE('------------------ DATE OPTIUNI --------------------');
+		IF v_nr_optiuni = 0 THEN
+			RAISE e_nu_are_optiuni;
+		ELSE
+			DBMS_OUTPUT.PUT_LINE('OPTIUNI EXTRA: ' || v_r_cerinta_9.optiuni);
+		END IF;
+	EXCEPTION
+		WHEN e_nu_are_optiuni THEN
+			DBMS_OUTPUT.PUT_LINE('VEHICULUL NU ARE OPTIUNI EXTRA');
+	END;
+
+	-- AFISARE CLIENT/SHOWROOM
+	IF v_r_cerinta_9.nume_client IS NOT NULL THEN
+		DBMS_OUTPUT.PUT_LINE(' ');
+		DBMS_OUTPUT.PUT_LINE('------------------ DATE CLIENT ------------------');
+		DBMS_OUTPUT.PUT_LINE('NUME CLIENT: ' || v_r_cerinta_9.nume_client);
+	ELSE
+		DBMS_OUTPUT.PUT_LINE(' ');
+		DBMS_OUTPUT.PUT_LINE('------------------ DATE SHOWROOM ---------------');
+		DBMS_OUTPUT.PUT_LINE('NUME SHOWROOM: ' || v_r_cerinta_9.nume_showroom);
+	END IF;
+
+EXCEPTION
+	WHEN e_nu_exista_vehicule THEN
+		RAISE_APPLICATION_ERROR(-20001, 'NU EXISTA VEHICULE CU ACEST ID, MARCA SI MODEL');
+	WHEN OTHERS THEN
+		RAISE_APPLICATION_ERROR(-20000, 'EROARE: ' || SQLERRM);
+END cerinta_9;
+/
+
+BEGIN
+
+	cerinta_9(1, 'DACIA', 'DUSTER');
+	
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE('**********************************************************');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	
+	cerinta_9(11, 'DACIA', 'DUSTER');
+	
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE('**********************************************************');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	
+	cerinta_9(21, 'DACIA', 'DUSTER');
+
+	--cerinta_9(-1, 'VEHICUL', 'INEXISTENT');
+
 END;
 /
