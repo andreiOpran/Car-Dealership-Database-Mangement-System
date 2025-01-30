@@ -566,7 +566,7 @@ END;
 -- LA FINAL SA SE AFISEZE SUMA TOTALA A VEHICULELOR VANDUTE IN 2024
 
 
-CREATE OR REPLACE PROCEDURE cerinta_7 IS
+CREATE OR REPLACE PROCEDURE cerinta_7_modificat(p_an IN NUMBER) IS
 
 	CURSOR c_vehicule_clienti (p_id_vehicul_factura FACTURI.ID_VEHICUL%TYPE) IS
 		SELECT
@@ -590,21 +590,21 @@ BEGIN
 		COUNT(*)
 	INTO v_nr_vehicule_clienti
 	FROM FACTURI
-	WHERE EXTRACT(YEAR FROM DATA_FACTURA) = 2024;
+	WHERE EXTRACT(YEAR FROM DATA_FACTURA) = p_an;
 
 	IF v_nr_vehicule_clienti = 0 THEN
 		RAISE e_nu_exista_vehicule;
 	END IF;
 
 	DBMS_OUTPUT.PUT_LINE('---------------------------------------------');
-	DBMS_OUTPUT.PUT_LINE('VEHICULE VANDUTE IN ANUL 2024:');
+	DBMS_OUTPUT.PUT_LINE('VEHICULE VANDUTE IN ANUL ' || p_an || ':');
 	FOR angajat_factura_2024 in (SELECT 
 									F.ID_VEHICUL,
 									A.ID_ANGAJAT,
 									A.NUME 
 								FROM FACTURI F
 								JOIN ANGAJATI A ON F.ID_ANGAJAT = A.ID_ANGAJAT
-								WHERE EXTRACT(YEAR FROM DATA_FACTURA) = 2024) LOOP
+								WHERE EXTRACT(YEAR FROM DATA_FACTURA) = p_an) LOOP
 
 		FOR vehicul_client in c_vehicule_clienti(angajat_factura_2024.ID_VEHICUL) LOOP
 
@@ -624,18 +624,32 @@ BEGIN
 
 	END LOOP;
 	DBMS_OUTPUT.PUT_LINE('---------------------------------------------------');
-	DBMS_OUTPUT.PUT_LINE('SUMA TOTALA A VEHICULELOR VANDUTE IN 2024: ' || v_suma);
+	DBMS_OUTPUT.PUT_LINE('SUMA TOTALA A VEHICULELOR VANDUTE IN ' || p_an || ': ' || v_suma);
 
 EXCEPTION
 	WHEN e_nu_exista_vehicule THEN
-		RAISE_APPLICATION_ERROR(-20001, 'NU EXISTA VEHICULE VANDUTE IN ANUL 2024');
+		RAISE_APPLICATION_ERROR(-20001, 'NU EXISTA VEHICULE VANDUTE IN ANUL ' || p_an);
 	WHEN OTHERS THEN
 		RAISE_APPLICATION_ERROR(-20000, 'EROARE: ' || SQLERRM);
-END cerinta_7;
+END cerinta_7_modificat;
 /
 
+DECLARE
+	v_an NUMBER(6) := 2023;
 BEGIN
-	cerinta_7;
+	cerinta_7_modificat(2024);
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE('******************************************************************************');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	cerinta_7_modificat(2023);
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE('******************************************************************************');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	DBMS_OUTPUT.PUT_LINE(' ');
+	cerinta_7_modificat(2022);
 END;
 /
 
@@ -763,9 +777,7 @@ CREATE OR REPLACE PROCEDURE cerinta_9(p_id_vehicul IN VEHICULE.ID_VEHICUL%TYPE, 
 
 		nume_client CLIENTI.NUME%TYPE,
 		-- SAU
-		nume_showroom SHOWROOMURI.NUME%TYPE,
-
-		optiuni VARCHAR2(2048)
+		nume_showroom SHOWROOMURI.NUME%TYPE
 	);
 
 	v_r_cerinta_9 r_cerinta_9;
@@ -775,6 +787,9 @@ CREATE OR REPLACE PROCEDURE cerinta_9(p_id_vehicul IN VEHICULE.ID_VEHICUL%TYPE, 
 
 	e_nu_exista_vehicule EXCEPTION;
 	e_nu_are_optiuni EXCEPTION;
+
+	TYPE tip_tablou_indexat IS TABLE OF OPTIUNI.NUME%TYPE INDEX BY PLS_INTEGER;
+	tablou_optiuni tip_tablou_indexat;
 
 BEGIN
 
@@ -797,6 +812,54 @@ BEGIN
 	FROM VEHICULE_OPTIUNI
 	WHERE ID_VEHICUL = p_id_vehicul;
 
+	DBMS_OUTPUT.PUT_LINE(v_nr_optiuni);
+	DBMS_OUTPUT.PUT_LINE(tablou_optiuni.COUNT);
+
+	-- EXTRAGERE OPTIUNI
+	SELECT 
+		O.NUME
+	BULK COLLECT INTO tablou_optiuni
+	FROM OPTIUNI O
+	JOIN VEHICULE_OPTIUNI VO ON O.ID_OPTIUNE = VO.ID_OPTIUNE
+	WHERE VO.ID_VEHICUL = p_id_vehicul;
+
+	DBMS_OUTPUT.PUT_LINE(tablou_optiuni.COUNT);
+
+	
+
+	-- SELECT 
+	-- 	v_r_cerinta_9.id_vehicul, v_r_cerinta_9.marca, v_r_cerinta_9.model, 
+	-- 	v_r_cerinta_9.an_fabricatie, v_r_cerinta_9.pret, v_r_cerinta_9.id_motor, 
+	-- 	v_r_cerinta_9.cai_putere, v_r_cerinta_9.capacitate_cilindrica, 
+	-- 	v_r_cerinta_9.nume_client, v_r_cerinta_9.nume_showroom
+	-- INTO 
+	-- 	v_r_cerinta_9.id_vehicul, v_r_cerinta_9.marca, v_r_cerinta_9.model, 
+	-- 	v_r_cerinta_9.an_fabricatie, v_r_cerinta_9.pret, v_r_cerinta_9.id_motor, 
+	-- 	v_r_cerinta_9.cai_putere, v_r_cerinta_9.capacitate_cilindrica, 
+	-- 	v_r_cerinta_9.nume_client, v_r_cerinta_9.nume_showroom
+	-- FROM (
+	-- 	SELECT
+	-- 		V.ID_VEHICUL,
+	-- 		V.MARCA,
+	-- 		V.MODEL,
+	-- 		V.AN_FABRICATIE,
+	-- 		V.PRET,
+	-- 		M.ID_MOTOR,
+	-- 		M.CAI_PUTERE,
+	-- 		M.CAPACITATE_CILINDRICA,
+	-- 		C.NUME,
+	-- 		S.NUME
+	-- 	FROM VEHICULE V
+	-- 	JOIN MOTOARE M ON V.ID_MOTOR = M.ID_MOTOR
+	-- 	LEFT JOIN CLIENTI C ON V.ID_CLIENT = C.ID_CLIENT
+	-- 	LEFT JOIN SHOWROOMURI S ON V.ID_SHOWROOM = S.ID_SHOWROOM
+	-- 	LEFT JOIN VEHICULE_OPTIUNI VO ON V.ID_VEHICUL = VO.ID_VEHICUL
+	-- 	WHERE V.ID_VEHICUL = p_id_vehicul AND UPPER(V.MARCA) = UPPER(p_marca) 
+	-- 		AND UPPER(V.MODEL) = UPPER(p_model)
+	-- 	ORDER BY V.ID_VEHICUL
+	-- )
+	-- WHERE ROWNUM = 1;
+
 	SELECT
 		V.ID_VEHICUL,
 		V.MARCA,
@@ -807,22 +870,20 @@ BEGIN
 		M.CAI_PUTERE,
 		M.CAPACITATE_CILINDRICA,
 		C.NUME,
-		S.NUME,
-		LISTAGG(O.NUME, ', ') WITHIN GROUP (ORDER BY O.ID_OPTIUNE)
-	INTO v_r_cerinta_9.id_vehicul, v_r_cerinta_9.marca, v_r_cerinta_9.model, 
-			v_r_cerinta_9.an_fabricatie, v_r_cerinta_9.pret, v_r_cerinta_9.id_motor, 
-			v_r_cerinta_9.cai_putere, v_r_cerinta_9.capacitate_cilindrica, 
-			v_r_cerinta_9.nume_client, v_r_cerinta_9.nume_showroom, v_r_cerinta_9.optiuni
-	FROM VEHICULE V
-	JOIN MOTOARE M ON V.ID_MOTOR = M.ID_MOTOR
-	LEFT JOIN CLIENTI C ON V.ID_CLIENT = C.ID_CLIENT
-	LEFT JOIN SHOWROOMURI S ON V.ID_SHOWROOM = S.ID_SHOWROOM
-	LEFT JOIN VEHICULE_OPTIUNI VO ON V.ID_VEHICUL = VO.ID_VEHICUL
-	LEFT JOIN OPTIUNI O ON VO.ID_OPTIUNE = O.ID_OPTIUNE
-	WHERE V.ID_VEHICUL = p_id_vehicul AND UPPER(V.MARCA) = UPPER(p_marca) 
-			AND UPPER(V.MODEL) = UPPER(p_model)
-	GROUP BY V.ID_VEHICUL, V.MARCA, V.MODEL, V.AN_FABRICATIE, V.PRET, M.ID_MOTOR, 
-				M.CAI_PUTERE, M.CAPACITATE_CILINDRICA, C.NUME, S.NUME;
+		S.NUME
+		INTO v_r_cerinta_9.id_vehicul, v_r_cerinta_9.marca, v_r_cerinta_9.model,
+		v_r_cerinta_9.an_fabricatie, v_r_cerinta_9.pret, v_r_cerinta_9.id_motor,
+		v_r_cerinta_9.cai_putere, v_r_cerinta_9.capacitate_cilindrica,
+		v_r_cerinta_9.nume_client, v_r_cerinta_9.nume_showroom
+		FROM VEHICULE V
+		JOIN MOTOARE M ON V.ID_MOTOR = M.ID_MOTOR
+		LEFT JOIN CLIENTI C ON V.ID_CLIENT = C.ID_CLIENT
+		LEFT JOIN SHOWROOMURI S ON V.ID_SHOWROOM = S.ID_SHOWROOM
+		-- LEFT JOIN VEHICULE_OPTIUNI VO ON V.ID_VEHICUL = VO.ID_VEHICUL
+		-- LEFT JOIN OPTIUNI O ON VO.ID_OPTIUNE = O.ID_OPTIUNE
+		WHERE V.ID_VEHICUL = p_id_vehicul AND UPPER(V.MARCA) = UPPER(p_marca)
+		AND UPPER(V.MODEL) = UPPER(p_model);
+
 
 	-- AFISARE VEHICUL
 	DBMS_OUTPUT.PUT_LINE('------------------ DATE VEHICUL ------------------');
@@ -847,7 +908,13 @@ BEGIN
 		IF v_nr_optiuni = 0 THEN
 			RAISE e_nu_are_optiuni;
 		ELSE
-			DBMS_OUTPUT.PUT_LINE('OPTIUNI EXTRA: ' || v_r_cerinta_9.optiuni);
+			DBMS_OUTPUT.PUT('OPTIUNI EXTRA: ');
+
+			FOR i IN 1..tablou_optiuni.COUNT LOOP
+				DBMS_OUTPUT.PUT(tablou_optiuni(i) || ' ');
+			END LOOP;
+
+
 		END IF;
 		
 	EXCEPTION
@@ -876,25 +943,25 @@ END cerinta_9;
 
 BEGIN
 
-	cerinta_9(1, 'DACIA', 'DUSTER');
+	-- cerinta_9(1, 'DACIA', 'DUSTER');
 	
-	DBMS_OUTPUT.PUT_LINE(' ');
-	DBMS_OUTPUT.PUT_LINE(' ');
-	DBMS_OUTPUT.PUT_LINE('**********************************************************');
-	DBMS_OUTPUT.PUT_LINE(' ');
-	DBMS_OUTPUT.PUT_LINE(' ');
+	-- DBMS_OUTPUT.PUT_LINE(' ');
+	-- DBMS_OUTPUT.PUT_LINE(' ');
+	-- DBMS_OUTPUT.PUT_LINE('**********************************************************');
+	-- DBMS_OUTPUT.PUT_LINE(' ');
+	-- DBMS_OUTPUT.PUT_LINE(' ');
 	
 	cerinta_9(11, 'DACIA', 'DUSTER');
 	
-	DBMS_OUTPUT.PUT_LINE(' ');
-	DBMS_OUTPUT.PUT_LINE(' ');
-	DBMS_OUTPUT.PUT_LINE('**********************************************************');
-	DBMS_OUTPUT.PUT_LINE(' ');
-	DBMS_OUTPUT.PUT_LINE(' ');
+	-- DBMS_OUTPUT.PUT_LINE(' ');
+	-- DBMS_OUTPUT.PUT_LINE(' ');
+	-- DBMS_OUTPUT.PUT_LINE('**********************************************************');
+	-- DBMS_OUTPUT.PUT_LINE(' ');
+	-- DBMS_OUTPUT.PUT_LINE(' ');
 	
-	cerinta_9(21, 'DACIA', 'DUSTER');
+	-- cerinta_9(21, 'DACIA', 'DUSTER');
 
-	cerinta_9(-1, 'VEHICUL', 'INEXISTENT');
+	--cerinta_9(-1, 'VEHICUL', 'INEXISTENT');
 
 END;
 /
